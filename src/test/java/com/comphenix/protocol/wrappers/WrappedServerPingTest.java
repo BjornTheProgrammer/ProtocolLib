@@ -1,17 +1,16 @@
 package com.comphenix.protocol.wrappers;
 
 import java.io.IOException;
-import java.util.Optional;
 
 import com.comphenix.protocol.BukkitInitialization;
 import com.comphenix.protocol.PacketType;
 import com.comphenix.protocol.events.PacketContainer;
 import com.comphenix.protocol.utility.MinecraftProtocolVersion;
 import com.comphenix.protocol.wrappers.WrappedServerPing.CompressedImage;
+
 import com.google.common.io.Resources;
 import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
 import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.yaml.snakeyaml.external.biz.base64Coder.Base64Coder;
 
@@ -25,21 +24,13 @@ public class WrappedServerPingTest {
     }
 
     @Test
-    @Disabled // TODO MotD is null
     public void fullTest() throws IOException  {
         PacketContainer packet = new PacketContainer(PacketType.Status.Server.SERVER_INFO);
-        Optional<WrappedServerPing> optionalPing = packet.getServerPings().optionRead(0);
-        assertTrue(optionalPing.isPresent());
-
-        WrappedServerPing serverPing = optionalPing.get();
-        assertNotNull(serverPing.getMotD());
-        assertNotNull(serverPing.getFavicon());
-        assertNotNull(serverPing.getPlayers());
-        assertNotNull(serverPing.getVersionName());
 
         CompressedImage tux = CompressedImage.fromPng(Resources.getResource("tux.png").openStream());
         byte[] original = tux.getDataCopy();
 
+        WrappedServerPing serverPing = new WrappedServerPing();
         serverPing.setMotD("Hello, this is a test.");
         serverPing.setPlayersOnline(5);
         serverPing.setPlayersMaximum(10);

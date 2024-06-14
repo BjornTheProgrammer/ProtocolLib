@@ -479,8 +479,12 @@ public class PacketType implements Serializable, Cloneable, Comparable<PacketTyp
             public static final PacketType UPDATE_SIGN =                  new PacketType(PROTOCOL, SENDER, 0x35, "SignUpdate", "UpdateSign", "CPacketUpdateSign");
             public static final PacketType ARM_ANIMATION =                new PacketType(PROTOCOL, SENDER, 0x36, "Swing", "ArmAnimation", "CPacketAnimation");
             public static final PacketType SPECTATE =                     new PacketType(PROTOCOL, SENDER, 0x37, "TeleportToEntity", "Spectate", "CPacketSpectate");
-            public static final PacketType USE_ITEM_ON =                  new PacketType(PROTOCOL, SENDER, 0x38, "UseItemOn", "BlockPlace", "CPacketPlayerTryUseItemOnBlock");
-            public static final PacketType USE_ITEM =                     new PacketType(PROTOCOL, SENDER, 0x39, "UseItem", "CPacketPlayerTryUseItem");
+
+            public static final PacketType USE_ITEM_ON = new PacketType(PROTOCOL, SENDER, 0x38, "UseItemOn");
+            public static final PacketType USE_ITEM = new PacketType(PROTOCOL, SENDER, 0x39, "UseItem");
+
+            // public static final PacketType USE_ITEM_ON =                  new PacketType(PROTOCOL, SENDER, 0x38, "UseItemOn", "BlockPlace", "CPacketPlayerTryUseItemOnBlock");
+            // public static final PacketType USE_ITEM =                     new PacketType(PROTOCOL, SENDER, 0x39, "UseItem", "CPacketPlayerTryUseItem");
 
             /**
              * @deprecated Removed in 1.17

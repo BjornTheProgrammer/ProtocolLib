@@ -1,11 +1,14 @@
 package com.comphenix.protocol.wrappers;
 
+import java.util.Random;
+
 import com.comphenix.protocol.BukkitInitialization;
 import com.comphenix.protocol.PacketType;
 import com.comphenix.protocol.events.PacketContainer;
 import com.comphenix.protocol.reflect.EquivalentConverter;
 import com.comphenix.protocol.utility.TestUtils;
 import com.comphenix.protocol.wrappers.Either.Left;
+
 import org.apache.commons.lang.builder.EqualsBuilder;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
@@ -17,8 +20,6 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
-import java.util.Random;
-
 import static org.junit.jupiter.api.Assertions.*;
 
 public class BukkitConvertersTest {
@@ -29,7 +30,7 @@ public class BukkitConvertersTest {
     }
 
     @Test
-    @Disabled // TODO -- enchantment cannot be applied to this itemstack(???)
+    // @Disabled // TODO -- enchantment cannot be applied to this itemstack(???)
     public void testItemStacks() {
         ItemStack item = new ItemStack(Material.DIAMOND_SWORD, 16);
         item.addEnchantment(Enchantment.SHARPNESS, 4);

@@ -6,6 +6,8 @@ import java.util.List;
 import com.comphenix.protocol.BukkitInitialization;
 import com.comphenix.protocol.PacketType;
 
+import net.minecraft.network.protocol.game.ServerboundUseItemPacket;
+import net.minecraft.network.protocol.login.LoginPacketTypes;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 

@@ -152,7 +152,6 @@ class SerializedOfflinePlayer implements OfflinePlayer, Serializable {
         return lastSeen;
     }
 
-    @Override
     public Location getRespawnLocation() {
         return null;
     }
@@ -241,10 +240,20 @@ class SerializedOfflinePlayer implements OfflinePlayer, Serializable {
         return uuid;
     }
 
+    /**
+     * @return
+     */
+    @NotNull
     @Override
-    public @NotNull PlayerProfile getPlayerProfile() {
+    public PlayerProfile getPlayerProfile() {
         return null;
     }
+
+    /*
+    public com.destroystokyo.paper.profile.PlayerProfile getPlayerProfile() {
+        return null;
+    }
+    */
 
     @Override
     public String getName() {
@@ -286,6 +295,11 @@ class SerializedOfflinePlayer implements OfflinePlayer, Serializable {
     @Override
     public boolean isOnline() {
         return online;
+    }
+
+    // @Override
+    public boolean isConnected() {
+        return false;
     }
 
     @Override

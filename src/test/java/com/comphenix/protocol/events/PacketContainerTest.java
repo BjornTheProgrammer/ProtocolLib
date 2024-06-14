@@ -22,6 +22,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.EnumSet;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -38,7 +39,7 @@ import com.comphenix.protocol.reflect.StructureModifier;
 import com.comphenix.protocol.reflect.accessors.Accessors;
 import com.comphenix.protocol.reflect.accessors.FieldAccessor;
 import com.comphenix.protocol.reflect.cloning.SerializableCloner;
-import com.comphenix.protocol.utility.MinecraftMethods;
+import com.comphenix.protocol.reflect.fuzzy.FuzzyFieldContract;
 import com.comphenix.protocol.utility.MinecraftReflection;
 import com.comphenix.protocol.wrappers.BlockPosition;
 import com.comphenix.protocol.wrappers.BukkitConverters;
@@ -53,11 +54,12 @@ import com.comphenix.protocol.wrappers.EnumWrappers.SoundCategory;
 import com.comphenix.protocol.wrappers.MovingObjectPositionBlock;
 import com.comphenix.protocol.wrappers.Pair;
 import com.comphenix.protocol.wrappers.PlayerInfoData;
+import com.comphenix.protocol.wrappers.WrappedAttribute;
+import com.comphenix.protocol.wrappers.WrappedAttributeModifier;
 import com.comphenix.protocol.wrappers.WrappedBlockData;
 import com.comphenix.protocol.wrappers.WrappedChatComponent;
 import com.comphenix.protocol.wrappers.WrappedDataValue;
 import com.comphenix.protocol.wrappers.WrappedDataWatcher;
-import com.comphenix.protocol.wrappers.WrappedDataWatcher.Registry;
 import com.comphenix.protocol.wrappers.WrappedEnumEntityUseAction;
 import com.comphenix.protocol.wrappers.WrappedGameProfile;
 import com.comphenix.protocol.wrappers.WrappedMessageSignature;
@@ -72,18 +74,21 @@ import net.md_5.bungee.api.chat.ClickEvent;
 import net.md_5.bungee.api.chat.ComponentBuilder;
 import net.md_5.bungee.api.chat.HoverEvent;
 import net.md_5.bungee.api.chat.hover.content.Text;
-import net.minecraft.core.Holder;
-import net.minecraft.core.IRegistry;
+import net.minecraft.core.Registry;
 import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.network.protocol.game.PacketPlayOutGameStateChange;
-import net.minecraft.network.protocol.game.PacketPlayOutUpdateAttributes;
-import net.minecraft.network.protocol.game.PacketPlayOutUpdateAttributes.AttributeSnapshot;
-import net.minecraft.resources.MinecraftKey;
+import net.minecraft.network.codec.StreamCodec;
+import net.minecraft.network.protocol.game.ClientboundGameEventPacket;
+import net.minecraft.network.protocol.game.ClientboundUpdateAttributesPacket;
+import net.minecraft.network.protocol.game.ClientboundUpdateAttributesPacket.AttributeSnapshot;
+import net.minecraft.network.protocol.game.ClientboundUpdateMobEffectPacket;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.effect.MobEffect;
-import net.minecraft.world.effect.MobEffectList;
+import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.effect.MobEffects;
-import net.minecraft.world.entity.ai.attributes.AttributeBase;
+import net.minecraft.world.entity.ai.attributes.AttributeInstance;
 import net.minecraft.world.entity.ai.attributes.AttributeModifier;
+import net.minecraft.world.entity.ai.attributes.AttributeModifier.Operation;
+import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.entity.animal.CatVariant;
 import net.minecraft.world.entity.animal.FrogVariant;
 import org.apache.commons.lang.SerializationUtils;
@@ -201,7 +206,7 @@ public class PacketContainerTest {
     }
 
     @Test
-    @Disabled // TODO
+    @Disabled // TODO ???
     public void testGetStringArrays() {
         PacketContainer packet = new PacketContainer(PacketType.Play.Client.UPDATE_SIGN);
         this.testObjectArray(packet.getStringArrays(), 0,
@@ -337,7 +342,7 @@ public class PacketContainerTest {
     }
 
     @Test
-    // @Disabled // TODO -- handle type is null
+    // // @Disabled // TODO -- handle type is null
     public void testGetDataValueCollectionModifier() {
         PacketContainer entityMetadata = new PacketContainer(PacketType.Play.Server.ENTITY_METADATA);
         StructureModifier<List<WrappedDataValue>> watchableAccessor = entityMetadata.getDataValueCollectionModifier();
@@ -345,8 +350,8 @@ public class PacketContainerTest {
         assertEquals(0, watchableAccessor.read(0).size());
 
         List<WrappedDataValue> values = Lists.newArrayList(
-                new WrappedDataValue(0, Registry.get(Byte.class), (byte) 21),
-                new WrappedDataValue(1, Registry.get(String.class), "World"));
+                new WrappedDataValue(0, WrappedDataWatcher.Registry.get(Byte.class), (byte) 21),
+                new WrappedDataValue(1, WrappedDataWatcher.Registry.get(String.class), "World"));
 
         // Insert and read back
         watchableAccessor.write(0, values);
@@ -374,9 +379,9 @@ public class PacketContainerTest {
     }
 
     @Test
-    @Disabled // TODO
+    // @Disabled // TODO
     public void testSerialization() {
-        PacketContainer useItem = new PacketContainer(PacketType.Play.Client.USE_ITEM);
+        PacketContainer useItem = new PacketContainer(PacketType.Play.Client.USE_ITEM_ON);
         useItem.getMovingBlockPositions().write(0, new MovingObjectPositionBlock(
                 new BlockPosition(0, 1, 0),
                 new Vector(0, 1, 0),
@@ -388,7 +393,7 @@ public class PacketContainerTest {
 
         PacketContainer copy = (PacketContainer) SerializationUtils.clone(useItem);
 
-        assertEquals(PacketType.Play.Client.USE_ITEM, copy.getType());
+        assertEquals(PacketType.Play.Client.USE_ITEM_ON, copy.getType());
         assertEquals(Hand.MAIN_HAND, copy.getHands().read(0));
         assertEquals(5, copy.getIntegers().read(0));
 
@@ -504,45 +509,66 @@ public class PacketContainerTest {
     }
 
     @Test
-    @Disabled // TODO -- cloning fails
-    public void testAttributeList() {
-        PacketContainer attribute = new PacketContainer(PacketType.Play.Server.UPDATE_ATTRIBUTES);
-        attribute.getIntegers().write(0, 123); // Entity ID
+    public void testAttributeCloning() {
+        PacketContainer container = new PacketContainer(PacketType.Play.Server.UPDATE_ATTRIBUTES);
 
-        // Initialize some test data
-        List<AttributeModifier> modifiers = Lists.newArrayList(
-                new AttributeModifier(MinecraftKey.a("protocollib:test"),10,
-                        AttributeModifier.Operation.a));
+        WrappedAttribute attribute = WrappedAttribute.newBuilder()
+            .attributeKey("generic.max_health")
+            .baseValue(20.0D)
+            .modifiers(Lists.newArrayList(
+                WrappedAttributeModifier.newBuilder()
+                    .name("Test")
+                    .amount(1.0D)
+                    .operation(WrappedAttributeModifier.Operation.ADD_NUMBER)
+                    .build()
+            ))
+            .build();
 
-        // Obtain an AttributeSnapshot instance. This is complicated by the fact that AttributeSnapshots
-        // are inner classes (which is ultimately pointless because AttributeSnapshots don't access any
-        // members of the packet itself)
-        PacketPlayOutUpdateAttributes packet = (PacketPlayOutUpdateAttributes) attribute.getHandle();
-		IRegistry<AttributeBase> registry = BuiltInRegistries.s;
-        AttributeBase base = registry.a(MinecraftKey.a("generic.max_health"));
-        AttributeSnapshot snapshot = new AttributeSnapshot(Holder.a(base), 20.0D, modifiers);
-        attribute.getSpecificModifier(List.class).write(0, Lists.newArrayList(snapshot));
+        container.getAttributeCollectionModifier().write(0, List.of(attribute));
 
-        PacketContainer cloned = attribute.deepClone();
-        AttributeSnapshot
-                clonedSnapshot = (AttributeSnapshot) cloned.getSpecificModifier(List.class).read(0).get(0);
+        ClientboundUpdateAttributesPacket packet = (ClientboundUpdateAttributesPacket) container.getHandle();
 
-        // Compare the fields, because apparently the packet is a field in AttributeSnapshot
-        for (Field field : AttributeSnapshot.class.getDeclaredFields()) {
-            try {
-                // Skip the packet
-                if (field.getType().equals(packet.getClass())) {
-                    continue;
-                }
+        PacketContainer cloned = container.deepClone();
+        ClientboundUpdateAttributesPacket clonedPacket = (ClientboundUpdateAttributesPacket) cloned.getHandle();
 
-                field.setAccessible(true);
-                this.testEquality(field.get(snapshot), field.get(clonedSnapshot));
-            } catch (AssertionError e) {
-                throw e;
-            } catch (Throwable ex) {
-                ex.printStackTrace();
-            }
-        }
+        assertNotSame(packet, clonedPacket);
+        assertNotSame(packet.getValues(), clonedPacket.getValues());
+
+        List<AttributeSnapshot> values = packet.getValues();
+        List<AttributeSnapshot> clonedValues = clonedPacket.getValues();
+
+        assertEquals(values.size(), clonedValues.size());
+        assertNotSame(values.get(0), clonedValues.get(0));
+
+        AttributeSnapshot snapshot = values.get(0);
+        AttributeSnapshot clonedSnapshot = clonedValues.get(0);
+
+        assertEquals(Attributes.MAX_HEALTH, clonedSnapshot.attribute());
+        assertEquals(20.0D, clonedSnapshot.base());
+
+        assertNotSame(snapshot.modifiers(), clonedSnapshot.modifiers());
+    }
+
+    @Test
+    public void testReadAttributeList() {
+        AttributeInstance instance = new AttributeInstance(Attributes.MAX_HEALTH, (__) -> {});
+        instance.setBaseValue(20.0D);
+        instance.addTransientModifier(new AttributeModifier(ResourceLocation.parse("protocollib:test"), 1.0,
+            Operation.ADD_VALUE));
+
+        ClientboundUpdateAttributesPacket packet = new ClientboundUpdateAttributesPacket(1234, List.of(instance));
+        PacketContainer container = PacketContainer.fromPacket(packet);
+
+        List<WrappedAttribute> attributes = container.getAttributeCollectionModifier().read(0);
+        WrappedAttribute attribute = attributes.get(0);
+
+        assertEquals("generic.max_health", attribute.getAttributeKey());
+        assertEquals(20.0D, attribute.getBaseValue());
+
+        WrappedAttributeModifier modifier = attribute.getModifiers().iterator().next();
+        assertEquals(1.0D, modifier.getAmount());
+        assertEquals("protocollib:test", modifier.getKey().getFullKey());
+        assertEquals(WrappedAttributeModifier.Operation.ADD_NUMBER, modifier.getOperation());
     }
 
     @Test
@@ -569,28 +595,30 @@ public class PacketContainerTest {
     @SuppressWarnings("deprecation")
     public void testPotionEffect() {
         PotionEffect effect = new PotionEffect(PotionEffectType.FIRE_RESISTANCE, 20 * 60, 1);
-        MobEffect mobEffect = new MobEffect(MobEffects.l, effect.getDuration(),
+        MobEffectInstance mobEffect = new MobEffectInstance(MobEffects.FIRE_RESISTANCE, effect.getDuration(),
                 effect.getAmplifier(), effect.isAmbient(),
                 effect.hasParticles());
         int entityId = 42;
 
+        ClientboundUpdateMobEffectPacket packet;
+
         // The constructor we want to call
         PacketConstructor creator = PacketConstructor.DEFAULT.withPacket(
-                PacketType.Play.Server.ENTITY_EFFECT, new Class<?>[] { int.class, MobEffect.class, boolean.class });
-        PacketContainer packet = creator.createPacket(entityId, mobEffect, true);
+                PacketType.Play.Server.ENTITY_EFFECT, new Class<?>[] { int.class, MobEffectInstance.class, boolean.class });
+        PacketContainer container = creator.createPacket(entityId, mobEffect, true);
 
-        assertEquals(entityId, packet.getIntegers().read(0));
-        assertEquals(effect.getAmplifier(), packet.getIntegers().read(1));
-        assertEquals(effect.getDuration(), packet.getIntegers().read(2));
+        assertEquals(entityId, container.getIntegers().read(0));
+        assertEquals(effect.getAmplifier(), container.getIntegers().read(1));
+        assertEquals(effect.getDuration(), container.getIntegers().read(2));
 
         WrappedRegistry registry = WrappedRegistry.getRegistry(MinecraftReflection.getMobEffectListClass());
 
-        Object effectList = assertInstanceOf(
-            MobEffectList.class,
-            packet.getHolders(MobEffectList.class, InternalStructure.CONVERTER).read(0).getHandle()
+        MobEffect effectList = assertInstanceOf(
+            MobEffect.class,
+            container.getHolders(MobEffect.class, InternalStructure.CONVERTER).read(0).getHandle()
         );
 
-        assertEquals(effect.getType().getId(), registry.getId(effectList) + 1); // +1 is correct, see CraftPotionEffectType
+        assertTrue(effectList.getDescriptionId().contains("fire_resistance"));
 
         byte b = 0;
         if (effect.isAmbient()) {
@@ -605,7 +633,7 @@ public class PacketContainerTest {
 
         b |= 8;
 
-        assertEquals(b, (byte) packet.getBytes().read(0));
+        assertEquals(b, (byte) container.getBytes().read(0));
     }
 
     @Test
@@ -659,6 +687,8 @@ public class PacketContainerTest {
     @Disabled // TODO -- need a way to create a structure
     public void testInternalStructures() {
         PacketContainer container = new PacketContainer(PacketType.Play.Server.SCOREBOARD_TEAM);
+        container.getModifier().writeDefaults();
+
         Optional<InternalStructure> optStruct = container.getOptionalStructures().read(0);
         assertTrue(optStruct.isPresent());
         InternalStructure struct = optStruct.get();
@@ -698,7 +728,7 @@ public class PacketContainerTest {
 
     @Test
     public void testMovingBlockPos() {
-        PacketContainer container = new PacketContainer(PacketType.Play.Client.USE_ITEM);
+        PacketContainer container = new PacketContainer(PacketType.Play.Client.USE_ITEM_ON);
 
         Vector vector = new Vector(0, 1, 2);
         BlockPosition position = new BlockPosition(3, 4, 5);
@@ -801,7 +831,7 @@ public class PacketContainerTest {
     }
 
     @Test
-    @Disabled // TODO -- can't create MAP_CHUNK packet
+    // @Disabled // TODO -- can't create MAP_CHUNK packet
     public void testMapChunk() {
         // this is a special case as we are generating a data serializer class (we only need to construct the packet)
         PacketContainer container = new PacketContainer(PacketType.Play.Server.MAP_CHUNK);
@@ -889,17 +919,25 @@ public class PacketContainerTest {
         }
 
         Object buffer = MinecraftReflection.createPacketDataSerializer(0);
-        MinecraftMethods.getPacketWriteByteBufMethod().invoke(cloned.getHandle(), buffer);
+
+        FuzzyReflection fuzzy = FuzzyReflection.fromClass(constructed.getType().getPacketClass(), false);
+        FieldAccessor accessor = Accessors.getFieldAccessor(fuzzy.getField(FuzzyFieldContract.newBuilder()
+            .requireModifier(Modifier.STATIC)
+            .requireModifier(Modifier.PUBLIC)
+            .typeDerivedOf(StreamCodec.class)
+            .build()));
+        StreamCodec codec = (StreamCodec) accessor.get(cloned.getHandle());
+        codec.encode(buffer, cloned.getHandle());
     }
+
+    private static final Set<PacketType> CLONE_EXPECTED_FAILURES = Set.of();
 
     @Test
     @Disabled // TODO -- cloning is borked
     public void testCloning() {
-        // Try constructing all the packets
+        Set<PacketType> failures = new HashSet<>();
         for (PacketType type : PacketType.values()) {
-            // TODO: try to support chat - for now chat contains to many sub classes to properly clone it
-            if (type.isDeprecated() || !type.isSupported() || type.name().contains("CUSTOM_PAYLOAD") || type.name().contains("CHAT")
-                || type.name().contains("BUNDLE")) {
+            if (type.isDeprecated() || !type.isSupported()) {
                 continue;
             }
 
@@ -911,22 +949,22 @@ public class PacketContainerTest {
 
                 // Make sure watchable collections can be cloned
                 if (type == PacketType.Play.Server.ENTITY_METADATA) {
-					IRegistry<CatVariant> catVariantRegistry = BuiltInRegistries.ai;
+					Registry<CatVariant> catVariantRegistry = BuiltInRegistries.CAT_VARIANT;
                     constructed.getDataValueCollectionModifier().write(0, Lists.newArrayList(
-                            new WrappedDataValue(0, Registry.get(Byte.class), (byte) 1),
-                            new WrappedDataValue(0, Registry.get(Float.class), 5F),
-                            new WrappedDataValue(0, Registry.get(String.class), "String"),
-                            new WrappedDataValue(0, Registry.get(Boolean.class), true),
+                            new WrappedDataValue(0, WrappedDataWatcher.Registry.get(Byte.class), (byte) 1),
+                            new WrappedDataValue(0, WrappedDataWatcher.Registry.get(Float.class), 5F),
+                            new WrappedDataValue(0, WrappedDataWatcher.Registry.get(String.class), "String"),
+                            new WrappedDataValue(0, WrappedDataWatcher.Registry.get(Boolean.class), true),
                             new WrappedDataValue(
-                                    0, 
-                                    Registry.getChatComponentSerializer(true), 
+                                    0,
+                                    WrappedDataWatcher.Registry.getChatComponentSerializer(true),
                                     Optional.of(ComponentConverter.fromBaseComponent(TEST_COMPONENT).getHandle())),
                             new WrappedDataValue(
                                     0,
-                                    Registry.getItemStackSerializer(false),
+                                    WrappedDataWatcher.Registry.getItemStackSerializer(false),
                                     BukkitConverters.getItemStackConverter().getGeneric(new ItemStack(Material.WOODEN_AXE))),
-                            new WrappedDataValue(0, Registry.get(CatVariant.class), catVariantRegistry.e(CatVariant.e)),
-                            new WrappedDataValue(0, Registry.get(FrogVariant.class), FrogVariant.a)
+                            new WrappedDataValue(0, WrappedDataWatcher.Registry.get(CatVariant.class), catVariantRegistry.get(CatVariant.ALL_BLACK)),
+                            new WrappedDataValue(0, WrappedDataWatcher.Registry.get(FrogVariant.class), FrogVariant.COLD)
                     ));
                 } else if (type == PacketType.Play.Server.CHAT || type == PacketType.Login.Server.DISCONNECT) {
                     constructed.getChatComponents().write(0, ComponentConverter.fromBaseComponent(TEST_COMPONENT));
@@ -935,7 +973,7 @@ public class PacketContainerTest {
                 } else if (type == PacketType.Play.Server.GAME_STATE_CHANGE) {
                     constructed.getStructures().write(
                             0,
-                            InternalStructure.getConverter().getSpecific(PacketPlayOutGameStateChange.a));
+                            InternalStructure.getConverter().getSpecific(ClientboundGameEventPacket.ARROW_HIT_PLAYER));
                 } else if (type == PacketType.Play.Client.USE_ITEM || type == PacketType.Play.Client.BLOCK_PLACE) {
                     constructed.getLongs().write(0, 0L); // timestamp of the packet, not sent over the network
                 }
@@ -955,10 +993,13 @@ public class PacketContainerTest {
                     serializedCloned.getLongs().write(0, 0L);
                 }
                 this.assertPacketsEqualAndSerializable(constructed, serializedCloned);
-            } catch (Throwable t) {
-                Assertions.fail("Unable to clone " + type, t);
+            } catch (Throwable ex) {
+                failures.add(type);
+                ex.printStackTrace();
             }
         }
+
+        assertEquals(CLONE_EXPECTED_FAILURES, failures);
     }
 
     // Convert to objects that support equals()

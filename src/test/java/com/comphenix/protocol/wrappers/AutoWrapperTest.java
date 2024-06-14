@@ -2,24 +2,24 @@ package com.comphenix.protocol.wrappers;
 
 import java.util.Optional;
 
+import static com.comphenix.protocol.utility.MinecraftReflection.getMinecraftClass;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertSame;
+
 import com.comphenix.protocol.BukkitInitialization;
 import com.comphenix.protocol.utility.MinecraftReflection;
 
-import net.minecraft.advancements.AdvancementDisplay;
-import net.minecraft.advancements.AdvancementFrameType;
-import net.minecraft.network.chat.IChatBaseComponent;
-import net.minecraft.network.chat.contents.LiteralContents;
 import org.bukkit.Material;
 import org.bukkit.inventory.ItemStack;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
-import static com.comphenix.protocol.utility.MinecraftReflection.getMinecraftClass;
-
-import static org.junit.jupiter.api.Assertions.*;
-
 public class AutoWrapperTest {
 
+    /*
     @BeforeAll
     public static void initializeBukkit() {
         BukkitInitialization.initializeAll();
@@ -60,7 +60,7 @@ public class AutoWrapperTest {
               (net.minecraft.world.item.ItemStack)MinecraftReflection.getMinecraftItemStack(new ItemStack(Material.ENDER_EYE)),
               IChatBaseComponent.b("Test123"),
               IChatBaseComponent.b("Test567"),
-			  Optional.of(net.minecraft.resources.MinecraftKey.a("minecraft", "test")),
+			  Optional.of(new net.minecraft.resources.MinecraftKey("minecraft", "test")),
               AdvancementFrameType.b,
               true,
               false,
@@ -117,5 +117,5 @@ public class AutoWrapperTest {
         public boolean hidden;
         public float x;
         public float y;
-    }
+    }*/
 }

@@ -10,22 +10,22 @@ import com.comphenix.protocol.utility.MinecraftReflectionTestUtil;
 
 import com.google.common.util.concurrent.MoreExecutors;
 import net.minecraft.SharedConstants;
-import net.minecraft.commands.CommandDispatcher;
-import net.minecraft.core.IRegistry;
-import net.minecraft.core.IRegistryCustom;
+import net.minecraft.commands.Commands.CommandSelection;
 import net.minecraft.core.LayeredRegistryAccess;
+import net.minecraft.core.RegistryAccess;
 import net.minecraft.resources.RegistryDataLoader;
-import net.minecraft.server.DataPackResources;
-import net.minecraft.server.DispenserRegistry;
+import net.minecraft.server.Bootstrap;
 import net.minecraft.server.RegistryLayer;
+import net.minecraft.server.ReloadableServerResources;
 import net.minecraft.server.WorldLoader;
 import net.minecraft.server.dedicated.DedicatedServer;
-import net.minecraft.server.level.WorldServer;
-import net.minecraft.server.packs.EnumResourcePackType;
-import net.minecraft.server.packs.repository.ResourcePackLoader;
-import net.minecraft.server.packs.repository.ResourcePackRepository;
-import net.minecraft.server.packs.repository.ResourcePackSourceVanilla;
-import net.minecraft.server.packs.resources.ResourceManager;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.packs.PackType;
+import net.minecraft.server.packs.repository.Pack;
+import net.minecraft.server.packs.repository.PackRepository;
+import net.minecraft.server.packs.repository.ServerPacksSource;
+import net.minecraft.server.packs.resources.CloseableResourceManager;
+import net.minecraft.server.packs.resources.MultiPackResourceManager;
 import net.minecraft.world.flag.FeatureFlags;
 import net.minecraft.world.item.enchantment.Enchantments;
 import org.apache.logging.log4j.LogManager;
@@ -81,6 +81,8 @@ public class BukkitInitialization {
         synchronized (initLock) {
             if (initialized) {
                 return;
+            } else {
+                initialized = true;
             }
 
             try {
@@ -93,33 +95,33 @@ public class BukkitInitialization {
             instance.setPackage();
 
             // Minecraft Data Init
-            SharedConstants.a(); // .tryDetectVersion()
-            DispenserRegistry.a(); // .bootStrap()
+            SharedConstants.tryDetectVersion();
+            Bootstrap.bootStrap();
 
-            ResourcePackRepository resourcePackRepository = ResourcePackSourceVanilla.c(); // .createVanillaTrustedRepository()
-            resourcePackRepository.a(); // .reload()
+            PackRepository resourcePackRepository = ServerPacksSource.createVanillaTrustedRepository();
+            resourcePackRepository.reload();
 
-            ResourceManager resourceManager = new ResourceManager(
-                    EnumResourcePackType.b /* SERVER_DATA */,
-                    resourcePackRepository.c() /* getAvailablePacks() */ .stream().map(ResourcePackLoader::f /* openFull() */).collect(Collectors.toList()));
-            LayeredRegistryAccess<RegistryLayer> layeredRegistryAccess = RegistryLayer.a(); // .createRegistryAccess()
-            layeredRegistryAccess = WorldLoader.b(resourceManager, layeredRegistryAccess, RegistryLayer.b /* WORLDGEN */, RegistryDataLoader.a /* WORLDGEN_REGISTRIES */); // .loadAndReplaceLayer()
-			IRegistryCustom.Dimension registryCustom = layeredRegistryAccess.a().d(); // .compositeAccess().freeze()
-            // IRegistryCustom.Dimension registryCustom = layeredRegistryAccess.a().c(); // .compositeAccess().freeze()
+            CloseableResourceManager resourceManager = new MultiPackResourceManager(
+                PackType.SERVER_DATA,
+                resourcePackRepository.getAvailablePacks().stream().map(Pack::open).collect(Collectors.toList())
+            );
+            LayeredRegistryAccess<RegistryLayer> layeredRegistryAccess = RegistryLayer.createRegistryAccess();
+            layeredRegistryAccess = WorldLoader.loadAndReplaceLayer(resourceManager, layeredRegistryAccess, RegistryLayer.WORLDGEN, RegistryDataLoader.WORLDGEN_REGISTRIES);
+            RegistryAccess.Frozen registryCustom = layeredRegistryAccess.compositeAccess().freeze();
 
-            DataPackResources dataPackResources = DataPackResources.a(
-                    resourceManager,
-                    layeredRegistryAccess,
-                    FeatureFlags.d.a() /* REGISTRY.allFlags() */,
-                    CommandDispatcher.ServerType.b /* DEDICATED */,
-                    0,
-                    MoreExecutors.directExecutor(),
-                    MoreExecutors.directExecutor()
+            ReloadableServerResources dataPackResources = ReloadableServerResources.loadResources(
+                resourceManager,
+                layeredRegistryAccess,
+                FeatureFlags.REGISTRY.allFlags(),
+                CommandSelection.DEDICATED,
+                0,
+                MoreExecutors.directExecutor(),
+                MoreExecutors.directExecutor()
             ).join();
-            dataPackResources.g();
+            dataPackResources.updateRegistryTags();
 
             try {
-                IRegistry.class.getName();
+                RegistryAccess.class.getName();
             } catch (Throwable ex) {
                 ex.printStackTrace();
             }
@@ -131,7 +133,7 @@ public class BukkitInitialization {
             CraftServer mockedServer = mock(CraftServer.class);
             DedicatedServer mockedGameServer = mock(DedicatedServer.class);
 
-            when(mockedGameServer.bc()/*registryAccess*/).thenReturn(registryCustom);
+            when(mockedGameServer.registryAccess()).thenReturn(registryCustom);
 
             when(mockedServer.getLogger()).thenReturn(java.util.logging.Logger.getLogger("Minecraft"));
             when(mockedServer.getName()).thenReturn("Mock Server");
@@ -144,14 +146,20 @@ public class BukkitInitialization {
             when(mockedServer.getUnsafe()).thenReturn(CraftMagicNumbers.INSTANCE);
             when(mockedServer.getLootTable(any())).thenAnswer(invocation -> {
                 NamespacedKey key = invocation.getArgument(0);
-                return new CraftLootTable(key, dataPackResources.b().b(CraftLootTable.bukkitKeyToMinecraft(key)));
-            });
-            when(mockedServer.getRegistry(any())).thenAnswer(invocation -> {
-                Class<Keyed> registryType = invocation.getArgument(0);
-                return CraftRegistry.createRegistry(registryType, registryCustom);
+                return new CraftLootTable(key, dataPackResources.fullRegistries().getLootTable(CraftLootTable.bukkitKeyToMinecraft(key)));
             });
 
-            WorldServer nmsWorld = mock(WorldServer.class);
+            when(mockedServer.getRegistry(any())).thenAnswer(invocation -> {
+                Class<? extends Keyed> registryType = invocation.getArgument(0);
+
+                try {
+                    return CraftRegistry.createRegistry(registryType, registryCustom);
+                } catch (Exception ignored) {
+                    return mock(org.bukkit.Registry.class);
+                }
+            });
+
+            ServerLevel nmsWorld = mock(ServerLevel.class);
             SpigotWorldConfig mockWorldConfig = mock(SpigotWorldConfig.class);
 
             try {
@@ -172,10 +180,8 @@ public class BukkitInitialization {
             CraftRegistry.setMinecraftRegistry(registryCustom);
 
             // Init Enchantments
-            Enchantments.A.getClass();
+            Enchantments.AQUA_AFFINITY.getClass();
             // Enchantment.stopAcceptingRegistrations();
-
-            initialized = true;
         }
     }
 

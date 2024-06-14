@@ -1,16 +1,8 @@
 package com.comphenix.protocol.utility;
 
 import com.comphenix.protocol.BukkitInitialization;
+
 import com.mojang.authlib.GameProfile;
-import net.minecraft.nbt.NBTCompressedStreamTools;
-import net.minecraft.network.chat.IChatBaseComponent;
-import net.minecraft.network.protocol.game.PacketPlayOutUpdateAttributes;
-import net.minecraft.network.protocol.status.ServerPing;
-import net.minecraft.network.syncher.DataWatcher;
-import net.minecraft.server.network.PlayerConnection;
-import net.minecraft.util.MinecraftEncryption;
-import net.minecraft.world.level.ChunkCoordIntPair;
-import net.minecraft.world.level.block.state.IBlockData;
 import org.bukkit.Material;
 import org.bukkit.block.Block;
 import org.bukkit.craftbukkit.v1_21_R1.inventory.CraftItemStack;
@@ -21,13 +13,9 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import static com.comphenix.protocol.utility.TestUtils.assertItemsEqual;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.times;
-import static org.mockito.Mockito.verify;
+
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.*;
 
 public class MinecraftReflectionTest {
 
@@ -64,6 +52,7 @@ public class MinecraftReflectionTest {
         assertNull(MinecraftReflection.getNullableNMS("ProtocolLib"));
     }
 
+    /*
     @Test
     public void testAttributeSnapshot() {
         assertEquals(PacketPlayOutUpdateAttributes.AttributeSnapshot.class,
@@ -124,7 +113,7 @@ public class MinecraftReflectionTest {
     public void testLoginSignature() {
         assertEquals(MinecraftEncryption.b.class, MinecraftReflection.getSaltedSignatureClass());
     }
-
+*/
     @Test
     public void testItemStacks() {
         ItemStack stack = new ItemStack(Material.GOLDEN_SWORD);

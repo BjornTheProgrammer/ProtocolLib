@@ -22,7 +22,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * @author Etrayed
  */
-@Disabled // todo: figure this registry update out
+// @Disabled // todo: figure this registry update out
 public class WrappedLevelChunkDataTest {
 
     @BeforeAll

@@ -31,8 +31,8 @@ public class EnumWrappersTest {
     public void validateAllEnumFieldsAreWrapped() {
         Map<Class<?>, EquivalentConverter<?>> nativeEnums = EnumWrappers.getFromNativeMap();
         for (Entry<Class<?>, EquivalentConverter<?>> entry : nativeEnums.entrySet()) {
-            for (Object nativeConstant : entry.getKey().getEnumConstants()) {
-                try {
+            try {
+                for (Object nativeConstant : entry.getKey().getEnumConstants()) {
                     // yay, generics
                     EquivalentConverter<Object> converter = (EquivalentConverter<Object>) entry.getValue();
 
@@ -44,16 +44,15 @@ public class EnumWrappersTest {
                     assertNotNull(unwrappedValue);
 
                     assertEquals(nativeConstant, unwrappedValue);
-                } catch (Exception ex) {
-                    fail(ex);
-                    // ex.printStackTrace();
                 }
+            } catch (Exception ex) {
+                fail(ex);
             }
         }
     }
 
     @Test
     public void testValidity() {
-        assertEquals(EnumWrappers.INVALID, KNOWN_INVALID);
+        assertEquals(KNOWN_INVALID, EnumWrappers.INVALID);
     }
 }

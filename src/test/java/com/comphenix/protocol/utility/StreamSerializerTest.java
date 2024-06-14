@@ -1,16 +1,15 @@
 package com.comphenix.protocol.utility;
 
-import static com.comphenix.protocol.utility.TestUtils.assertItemsEqual;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-
-import com.comphenix.protocol.BukkitInitialization;
-import com.comphenix.protocol.wrappers.nbt.NbtCompound;
-import com.comphenix.protocol.wrappers.nbt.NbtFactory;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
+
+import com.comphenix.protocol.BukkitInitialization;
+import com.comphenix.protocol.wrappers.nbt.NbtCompound;
+import com.comphenix.protocol.wrappers.nbt.NbtFactory;
+
 import org.bukkit.ChatColor;
 import org.bukkit.Material;
 import org.bukkit.inventory.ItemStack;
@@ -18,6 +17,11 @@ import org.bukkit.inventory.meta.ItemMeta;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
+
+import static com.comphenix.protocol.utility.TestUtils.assertItemsEqual;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class StreamSerializerTest {
 
@@ -35,7 +39,10 @@ public class StreamSerializerTest {
         ByteArrayOutputStream buffer = new ByteArrayOutputStream();
         serializer.serializeString(new DataOutputStream(buffer), initial);
 
-        DataInputStream input = new DataInputStream(new ByteArrayInputStream(buffer.toByteArray()));
+        byte[] bytes = buffer.toByteArray();
+        assertTrue(bytes.length >= initial.length());
+
+        DataInputStream input = new DataInputStream(new ByteArrayInputStream(bytes));
         String deserialized = serializer.deserializeString(input, 50);
 
         assertEquals(initial, deserialized);
@@ -60,7 +67,7 @@ public class StreamSerializerTest {
     }
 
     @Test
-    @Disabled // TODO -- replaced with registry friendly bytebuf
+    @Disabled // TODO -- replaced with stream codecs
     public void testItems() throws IOException {
         StreamSerializer serializer = new StreamSerializer();
         ItemStack initial = new ItemStack(Material.STRING);
@@ -72,7 +79,7 @@ public class StreamSerializerTest {
     }
 
     @Test
-    @Disabled // TODO -- replaced with registry friendly bytebuf
+    @Disabled // TODO -- replaced with stream codecs
     public void testItemMeta() throws IOException {
         StreamSerializer serializer = new StreamSerializer();
         ItemStack initial = new ItemStack(Material.BLUE_WOOL, 2);
