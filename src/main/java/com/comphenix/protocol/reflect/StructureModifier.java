@@ -381,8 +381,14 @@ public class StructureModifier<T> {
      *
      * @return TRUE if we should, FALSE otherwise.
      */
-    private boolean needConversion() {
+    // TODO: don't leave this public
+    public boolean needConversion() {
         return this.converter != null && !this.customConvertHandling;
+    }
+
+    // TODO: don't leave this either
+    public EquivalentConverter<T> getConverter() {
+        return this.converter;
     }
 
     /**
