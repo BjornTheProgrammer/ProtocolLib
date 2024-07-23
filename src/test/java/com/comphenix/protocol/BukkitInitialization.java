@@ -8,12 +8,16 @@ import com.comphenix.protocol.reflect.accessors.Accessors;
 import com.comphenix.protocol.reflect.accessors.FieldAccessor;
 import com.comphenix.protocol.utility.MinecraftReflectionTestUtil;
 
+import com.google.common.base.Preconditions;
 import com.google.common.util.concurrent.MoreExecutors;
 import net.minecraft.SharedConstants;
 import net.minecraft.commands.Commands.CommandSelection;
 import net.minecraft.core.LayeredRegistryAccess;
 import net.minecraft.core.RegistryAccess;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.RegistryDataLoader;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.Bootstrap;
 import net.minecraft.server.RegistryLayer;
 import net.minecraft.server.ReloadableServerResources;
@@ -26,8 +30,13 @@ import net.minecraft.server.packs.repository.PackRepository;
 import net.minecraft.server.packs.repository.ServerPacksSource;
 import net.minecraft.server.packs.resources.CloseableResourceManager;
 import net.minecraft.server.packs.resources.MultiPackResourceManager;
+import net.minecraft.tags.TagKey;
+import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.flag.FeatureFlags;
+import net.minecraft.world.item.Item;
 import net.minecraft.world.item.enchantment.Enchantments;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.material.Fluid;
 import org.apache.logging.log4j.LogManager;
 import org.bukkit.Bukkit;
 import org.bukkit.Keyed;
@@ -38,7 +47,12 @@ import org.bukkit.craftbukkit.v1_21_R1.CraftRegistry;
 import org.bukkit.craftbukkit.v1_21_R1.CraftServer;
 import org.bukkit.craftbukkit.v1_21_R1.CraftWorld;
 import org.bukkit.craftbukkit.v1_21_R1.inventory.CraftItemFactory;
+import org.bukkit.craftbukkit.v1_21_R1.tag.CraftBlockTag;
+import org.bukkit.craftbukkit.v1_21_R1.tag.CraftEntityTag;
+import org.bukkit.craftbukkit.v1_21_R1.tag.CraftFluidTag;
+import org.bukkit.craftbukkit.v1_21_R1.tag.CraftItemTag;
 import org.bukkit.craftbukkit.v1_21_R1.util.CraftMagicNumbers;
+import org.bukkit.craftbukkit.v1_21_R1.util.CraftNamespacedKey;
 import org.bukkit.craftbukkit.v1_21_R1.util.Versioning;
 import org.spigotmc.SpigotWorldConfig;
 
@@ -157,6 +171,46 @@ public class BukkitInitialization {
                 } catch (Exception ignored) {
                     return mock(org.bukkit.Registry.class);
                 }
+            });
+
+            when(mockedServer.getTag(any(), any(), any())).then(mock -> {
+                String registry = mock.getArgument(0);
+                Class<?> clazz = mock.getArgument(2);
+                ResourceLocation key = CraftNamespacedKey.toMinecraft(mock.getArgument(1));
+
+                switch (registry) {
+                    case org.bukkit.Tag.REGISTRY_BLOCKS -> {
+                        Preconditions.checkArgument(clazz == org.bukkit.Material.class, "Block namespace must have block type");
+                        TagKey<Block> blockTagKey = TagKey.create(Registries.BLOCK, key);
+                        if (BuiltInRegistries.BLOCK.getTag(blockTagKey).isPresent()) {
+                            return new CraftBlockTag(BuiltInRegistries.BLOCK, blockTagKey);
+                        }
+                    }
+                    case org.bukkit.Tag.REGISTRY_ITEMS -> {
+                        Preconditions.checkArgument(clazz == org.bukkit.Material.class, "Item namespace must have item type");
+                        TagKey<Item> itemTagKey = TagKey.create(Registries.ITEM, key);
+                        if (BuiltInRegistries.ITEM.getTag(itemTagKey).isPresent()) {
+                            return new CraftItemTag(BuiltInRegistries.ITEM, itemTagKey);
+                        }
+                    }
+                    case org.bukkit.Tag.REGISTRY_FLUIDS -> {
+                        Preconditions.checkArgument(clazz == org.bukkit.Fluid.class, "Fluid namespace must have fluid type");
+                        TagKey<Fluid> fluidTagKey = TagKey.create(Registries.FLUID, key);
+                        if (BuiltInRegistries.FLUID.getTag(fluidTagKey).isPresent()) {
+                            return new CraftFluidTag(BuiltInRegistries.FLUID, fluidTagKey);
+                        }
+                    }
+                    case org.bukkit.Tag.REGISTRY_ENTITY_TYPES -> {
+                        Preconditions.checkArgument(clazz == org.bukkit.entity.EntityType.class, "Entity type namespace must have entity type");
+                        TagKey<EntityType<?>> entityTagKey = TagKey.create(Registries.ENTITY_TYPE, key);
+                        if (BuiltInRegistries.ENTITY_TYPE.getTag(entityTagKey).isPresent()) {
+                            return new CraftEntityTag(BuiltInRegistries.ENTITY_TYPE, entityTagKey);
+                        }
+                    }
+                    default -> throw new IllegalArgumentException();
+                }
+
+                return null;
             });
 
             ServerLevel nmsWorld = mock(ServerLevel.class);
